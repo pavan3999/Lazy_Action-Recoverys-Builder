@@ -175,7 +175,9 @@ jobs:
 
       - name: Build AERA recovery image
         run: |
-          set -eux
+          # Android envsetup/lunch scripts expect unset variables to be allowed.
+          # Do not enable Bash nounset (-u) in this step.
+          set -eo pipefail
           cd android-aera
 
           # Required by AERA: set before envsetup so device-specific exports
