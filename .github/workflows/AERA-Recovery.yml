@@ -97,6 +97,11 @@ jobs:
               device/xiaomi/sky/twrp_sky.mk
           fi
 
+          # Android 16 removed the legacy gsi_keys.mk product makefile.
+          # Use the Android 16 replacement shipped in build/make.
+          sed -i 's@$(SRC_TARGET_DIR)/product/gsi_keys.mk@$(SRC_TARGET_DIR)/product/developer_gsi_keys.mk@g' \
+            device/xiaomi/sky/device.mk
+
           # AERA Android 16 lunch targets use the bp2a release identifier.
           sed -i 's/twrp_sky-eng/twrp_sky-bp2a-eng/g' \
             device/xiaomi/sky/AndroidProducts.mk
