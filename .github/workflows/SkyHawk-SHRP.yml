@@ -229,6 +229,21 @@ jobs:
           cd android-recovery
           repo sync -j"$(nproc --all)" --force-sync
 
+      - name: Restore missing libfscrypttwrp module
+        run: |
+          set -euxo pipefail
+
+          TWRP_VENDOR_SRC="${RUNNER_TEMP}/shrp-vendor-twrp"
+
+          git clone --filter=blob:none --no-checkout https://github.com/SHRP-Reborn/android_vendor_twrp.git "${TWRP_VENDOR_SRC}"
+          git -C "${TWRP_VENDOR_SRC}" checkout 8610bf4391c8903e64c4d9c03b628c46f7c9daf5
+
+          test -f "${TWRP_VENDOR_SRC}/libfscrypt/Android.bp"
+          mkdir -p android-recovery/vendor/twrp/libfscrypt
+          cp -a "${TWRP_VENDOR_SRC}/libfscrypt/." android-recovery/vendor/twrp/libfscrypt/
+
+          grep -n 'name: "libfscrypttwrp"' android-recovery/vendor/twrp/libfscrypt/Android.bp
+
       - name: Clone Device Tree
         run: |
           cd android-recovery
