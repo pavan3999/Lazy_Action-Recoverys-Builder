@@ -6,7 +6,7 @@ on:
       MANIFEST:
         description: 'SHRP Manifest'
         required: true
-        default: 'https://github.com/SHRP/manifest.git'
+        default: 'https://github.com/SHRP-Reborn/manifest.git'
 
       MANIFEST_BRANCH:
         description: 'SHRP Manifest Branch'
@@ -227,7 +227,7 @@ jobs:
       - name: Repo Sync
         run: |
           cd android-recovery
-          repo sync -j"$(nproc --all)" --force-sync
+          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
       - name: Restore missing libfscrypttwrp module
         run: |
