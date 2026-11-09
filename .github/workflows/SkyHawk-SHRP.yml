@@ -148,6 +148,38 @@ jobs:
             unzip \
             zip
 
+      - name: Install Python 2.7 for legacy SHRP scripts
+        run: |
+          set -euxo pipefail
+
+          APPIMAGE="${RUNNER_TEMP}/python2.7.18.AppImage"
+          EXTRACT_DIR="${RUNNER_TEMP}/python2.7-extract"
+
+          curl -fL --retry 3 \
+            "https://github.com/niess/python-appimage/releases/download/python2.7/python2.7.18-cp27-cp27m-manylinux1_x86_64.AppImage" \
+            -o "${APPIMAGE}"
+
+          chmod +x "${APPIMAGE}"
+          mkdir -p "${EXTRACT_DIR}"
+
+          (
+            cd "${EXTRACT_DIR}"
+            "${APPIMAGE}" --appimage-extract
+          )
+
+          sudo rm -rf /opt/python2.7
+          sudo mv "${EXTRACT_DIR}/squashfs-root" /opt/python2.7
+
+          sudo tee /usr/local/bin/python2.7 >/dev/null <<'EOF'
+          #!/usr/bin/env bash
+          exec /opt/python2.7/AppRun "$@"
+          EOF
+
+          sudo chmod 0755 /usr/local/bin/python2.7
+
+          python2.7 --version
+          python2.7 -c 'import sys; print(sys.version)'
+
       - name: Install OpenJDK
         uses: actions/setup-java@v4
         with:
