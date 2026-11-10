@@ -65,11 +65,31 @@ jobs:
           git config --global user.email "154446636+pavan3999@users.noreply.github.com"
           repo init -u https://github.com/AERA-Recovery/android_manifest.git -b aera-16.0
 
+      # Restore Git object databases from the most recent AERA cache.
+      # The manifest is deliberately NOT cached: repo init above refreshes it
+      # from aera-16.0 on every run, so newly added/removed projects are noticed.
+      - name: Restore AERA Git source cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            android-aera/.repo/project-objects
+            android-aera/.repo/projects
+          key: aera-android16-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            aera-android16-${{ runner.os }}-
+
       - name: Sync AERA source
         run: |
           set -eux
           cd android-aera
-          repo sync -c --force-sync --no-clone-bundle --no-tags -j"$(nproc --all)"
+          REPO_SYNC_JOBS="${REPO_SYNC_JOBS:-8}"
+          repo sync \
+            -c \
+            --force-sync \
+            --no-tags \
+            --optimized-fetch \
+            --prune \
+            -j"${REPO_SYNC_JOBS}"
 
       - name: Clone sky recovery device tree
         run: |
