@@ -63,7 +63,7 @@ jobs:
           cd android-aera
           git config --global user.name "AERA Recovery Builder"
           git config --global user.email "154446636+pavan3999@users.noreply.github.com"
-          repo init -u https://github.com/AERA-Recovery/android_manifest.git -b aera-16.0
+          repo init -u https://github.com/AERA-Recovery/android_manifest.git -b aera-16.0 --depth=1
 
       # Restore Git object databases from the most recent AERA cache.
       # The manifest is deliberately NOT cached: repo init above refreshes it
