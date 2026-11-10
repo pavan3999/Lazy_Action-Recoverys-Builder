@@ -69,7 +69,7 @@ jobs:
       # The manifest is deliberately NOT cached: repo init above refreshes it
       # from aera-16.0 on every run, so newly added/removed projects are noticed.
       - name: Restore AERA Git source cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             android-aera/.repo/project-objects
@@ -82,14 +82,28 @@ jobs:
         run: |
           set -eux
           cd android-aera
-          REPO_SYNC_JOBS="${REPO_SYNC_JOBS:-8}"
+
+          echo "=== DISK BEFORE SYNC ==="
+          df -h /
+          df -h .
+          echo "=== AERA SOURCE CACHE SIZE ==="
+          du -sh .repo 2>/dev/null || true
+          echo "=== MEMORY AND SWAP BEFORE SYNC ==="
+          free -h
+          swapon --show
+
           repo sync \
             -c \
             --force-sync \
+            --no-clone-bundle \
             --no-tags \
-            --optimized-fetch \
-            --prune \
-            -j"${REPO_SYNC_JOBS}"
+            -j"$(nproc --all)"
+
+          echo "=== DISK AFTER SYNC ==="
+          df -h /
+          df -h .
+          echo "=== CHECKED-OUT SOURCE SIZE ==="
+          du -sh . 2>/dev/null || true
 
       - name: Clone sky recovery device tree
         run: |
