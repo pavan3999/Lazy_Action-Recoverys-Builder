@@ -212,6 +212,21 @@ jobs:
           fi
           EOF
 
+          # AERA's Plugin Manager is part of the native UI. Include its
+          # browser sandbox helper so the signed AERA Browser plugin can run
+          # when installed later from the in-recovery plugin catalog.
+          if ! grep -q 'aera-browser-jail' device/xiaomi/sky/device.mk; then
+            cat >> device/xiaomi/sky/device.mk <<'EOF'
+
+          # AERA Browser plugin runtime support
+          PRODUCT_PACKAGES += aera-browser-jail
+          EOF
+          fi
+
+          # Do not expose WLAN or mobile-data controls until sky has a verified
+          # device-matched WLAN module/firmware/init stack and cellular provider.
+          # UI flags alone would expose controls that cannot establish a link.
+
           echo "AERA device-tree overlay applied."
           grep -nE 'PRODUCT_PLATFORM|AERA_INCLUDE_CRYPTO|AERA_BRIGHTNESS_PATH|AERA_AB_DEVICE' \
             device/xiaomi/sky/twrp_sky.mk \
