@@ -102,6 +102,12 @@ jobs:
           sed -i 's@$(SRC_TARGET_DIR)/product/gsi_keys.mk@$(SRC_TARGET_DIR)/product/developer_gsi_keys.mk@g' \
             device/xiaomi/sky/device.mk
 
+          # Android 16 computes BOARD_API_LEVEL from RELEASE_BOARD_API_LEVEL.
+          # Keep BOARD_SHIPPING_API_LEVEL (first API level), but remove the
+          # legacy manual BOARD_API_LEVEL assignment from the device tree.
+          sed -i '/^[[:space:]]*BOARD_API_LEVEL[[:space:]]*:=/d' \
+            device/xiaomi/sky/device.mk
+
           # AERA Android 16 lunch targets use the bp2a release identifier.
           sed -i 's/twrp_sky-eng/twrp_sky-bp2a-eng/g' \
             device/xiaomi/sky/AndroidProducts.mk
