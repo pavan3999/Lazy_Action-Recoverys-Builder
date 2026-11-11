@@ -295,7 +295,10 @@ jobs:
           {
             echo "### AERA Recovery build — $DEVICE_NAME"
             echo
-            echo "- Manifest: $MANIFEST ($MANIFEST_BRANCH)"\n            echo "- Device tree: $DEVICE_TREE ($DEVICE_TREE_BRANCH)"\n            echo "- Device tree commit: `$DEVICE_TREE_COMMIT`"\n            echo "- Lunch target: $LUNCH_TARGET"
+            echo "- Manifest: $MANIFEST ($MANIFEST_BRANCH)"
+            echo "- Device tree: $DEVICE_TREE ($DEVICE_TREE_BRANCH)"
+            echo "- Device tree commit: `$DEVICE_TREE_COMMIT`"
+            echo "- Lunch target: $LUNCH_TARGET"
             echo "- Image size: `$SIZE bytes`"
             echo "- SHA-256:"
             echo
