@@ -319,12 +319,16 @@ jobs:
             echo "```"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload recovery image
+      - name: Upload AERA recovery images and installer
         uses: actions/upload-artifact@v4
         with:
           name: AERA-sky-recovery
           path: |
             android-aera/out/target/product/sky/recovery.img
+            android-aera/out/target/product/sky/AERA-*.img
+            android-aera/out/target/product/sky/AERA-*.zip
+            android-aera/out/target/product/sky/AERA-*.md5
             recovery-image.sha256
           if-no-files-found: error
+          compression-level: 0
           retention-days: 14
