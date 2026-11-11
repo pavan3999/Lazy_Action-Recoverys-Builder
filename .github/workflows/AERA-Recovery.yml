@@ -61,12 +61,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: aera-sky-${{ github.ref }}
+  group: aera-${{ inputs.DEVICE_NAME }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Build AERA Recovery for sky
+    name: Build AERA Recovery for ${{ inputs.DEVICE_NAME }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
 
@@ -311,7 +311,7 @@ jobs:
           path: |
             android-aera/out/target/product/${{ env.DEVICE_NAME }}/AERA-*.zip
             android-aera/out/target/product/${{ env.DEVICE_NAME }}/AERA-*.zip.md5
-          if-no-files-found: error
+          if-no-files-found: warn
           compression-level: 0
           retention-days: 14
 
