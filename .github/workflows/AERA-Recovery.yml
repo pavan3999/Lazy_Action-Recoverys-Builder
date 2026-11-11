@@ -215,7 +215,7 @@ jobs:
           echo "=== DEVICE TREE COMMIT ==="
           git -C "$DEVICE_PATH" log -1 --format='%H%n%cs%n%s'
           echo "=== AERA CONFIG FILES ==="
-          find "$DEVICE_PATH" -maxdepth 2 -type f \\( -iname '*aera*.mk' -o -name 'vendorsetup.sh' -o -name 'twrp_*.mk' \\) -print
+          find "$DEVICE_PATH" -maxdepth 2 -type f | grep -Ei 'aera|vendorsetup|twrp_' || true
 
       - name: Validate AERA product configuration
         run: |
