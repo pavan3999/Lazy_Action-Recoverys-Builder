@@ -2,6 +2,60 @@ name: AERA Recovery [sky]
 
 on:
   workflow_dispatch:
+    inputs:
+      MANIFEST:
+        description: 'AERA Android manifest URL'
+        required: true
+        default: 'https://github.com/AERA-Recovery/android_manifest.git'
+        type: string
+
+      MANIFEST_BRANCH:
+        description: 'AERA manifest branch'
+        required: true
+        default: 'aera-16.0'
+        type: string
+
+      DEVICE_TREE:
+        description: 'Recovery device tree Git URL'
+        required: true
+        default: 'https://github.com/Adithy4n/recovery_device_xiaomi_sky'
+        type: string
+
+      DEVICE_TREE_BRANCH:
+        description: 'Recovery device tree branch'
+        required: true
+        default: 'fox_16.0'
+        type: string
+
+      DEVICE_PATH:
+        description: 'Device tree checkout path'
+        required: true
+        default: 'device/xiaomi/sky'
+        type: string
+
+      DEVICE_NAME:
+        description: 'Device codename / output product directory'
+        required: true
+        default: 'sky'
+        type: string
+
+      LUNCH_TARGET:
+        description: 'Full AERA lunch target'
+        required: true
+        default: 'twrp_sky-bp2a-eng'
+        type: string
+
+      BUILD_JOBS:
+        description: 'Build parallel jobs (keep low on GitHub-hosted runners)'
+        required: true
+        default: '2'
+        type: string
+
+      MAX_RECOVERY_SIZE:
+        description: 'Maximum recovery.img size in bytes; use 0 to disable the size limit'
+        required: true
+        default: '104857600'
+        type: string
 
 permissions:
   contents: read
@@ -16,10 +70,51 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
 
+    env:
+      MANIFEST: ${{ inputs.MANIFEST }}
+      MANIFEST_BRANCH: ${{ inputs.MANIFEST_BRANCH }}
+      DEVICE_TREE: ${{ inputs.DEVICE_TREE }}
+      DEVICE_TREE_BRANCH: ${{ inputs.DEVICE_TREE_BRANCH }}
+      DEVICE_PATH: ${{ inputs.DEVICE_PATH }}
+      DEVICE_NAME: ${{ inputs.DEVICE_NAME }}
+      LUNCH_TARGET: ${{ inputs.LUNCH_TARGET }}
+      BUILD_JOBS: ${{ inputs.BUILD_JOBS }}
+      MAX_RECOVERY_SIZE: ${{ inputs.MAX_RECOVERY_SIZE }}
     steps:
       - name: Checkout builder
         uses: actions/checkout@v4
 
+      - name: Display and validate build inputs
+        run: |
+          set -eux
+          echo "Manifest: $MANIFEST"
+          echo "Manifest branch: $MANIFEST_BRANCH"
+          echo "Device tree: $DEVICE_TREE"
+          echo "Device tree branch: $DEVICE_TREE_BRANCH"
+          echo "Device path: $DEVICE_PATH"
+          echo "Device codename: $DEVICE_NAME"
+          echo "Lunch target: $LUNCH_TARGET"
+          echo "Build jobs: $BUILD_JOBS"
+          echo "Maximum recovery image size: $MAX_RECOVERY_SIZE bytes"
+
+          case "$DEVICE_PATH" in
+            ""|/*|*".."*) echo "::error::DEVICE_PATH must be a safe relative path."; exit 1 ;;
+          esac
+          case "$DEVICE_NAME" in
+            ""|*[!A-Za-z0-9_-]*) echo "::error::Invalid DEVICE_NAME."; exit 1 ;;
+          esac
+          case "$BUILD_JOBS" in
+            ""|*[!0-9]*) echo "::error::BUILD_JOBS must be numeric."; exit 1 ;;
+          esac
+          [ "$BUILD_JOBS" -ge 1 ] && [ "$BUILD_JOBS" -le 8 ]
+          case "$MAX_RECOVERY_SIZE" in
+            ""|*[!0-9]*) echo "::error::MAX_RECOVERY_SIZE must be numeric."; exit 1 ;;
+          esac
+          test -n "$MANIFEST"
+          test -n "$MANIFEST_BRANCH"
+          test -n "$DEVICE_TREE"
+          test -n "$DEVICE_TREE_BRANCH"
+          test -n "$LUNCH_TARGET"
       - name: Free runner space
         uses: rokibhasansagar/slimhub_actions@main
 
@@ -63,7 +158,7 @@ jobs:
           cd android-aera
           git config --global user.name "AERA Recovery Builder"
           git config --global user.email "154446636+pavan3999@users.noreply.github.com"
-          repo init -u https://github.com/AERA-Recovery/android_manifest.git -b aera-16.0 --depth=1
+          repo init -u "$MANIFEST" -b "$MANIFEST_BRANCH" --depth=1
 
       # Restore Git object databases from the most recent AERA cache.
       # The manifest is deliberately NOT cached: repo init above refreshes it
@@ -105,145 +200,36 @@ jobs:
           echo "=== CHECKED-OUT SOURCE SIZE ==="
           du -sh . 2>/dev/null || true
 
-      - name: Clone sky recovery device tree
+      - name: Clone recovery device tree
         run: |
           set -eux
           cd android-aera
-          git clone --depth=1 -b TWRP \
-            https://github.com/AltafYafai/device_xiaomi_sky-recovery.git \
-            device/xiaomi/sky
-          echo "DEVICE_TREE_COMMIT=$(git -C device/xiaomi/sky rev-parse HEAD)" >> "$GITHUB_ENV"
+          mkdir -p "$(dirname "$DEVICE_PATH")"
+          git clone --depth=1 --single-branch --branch "$DEVICE_TREE_BRANCH" "$DEVICE_TREE" "$DEVICE_PATH"
+          echo "DEVICE_TREE_COMMIT=$(git -C "$DEVICE_PATH" rev-parse HEAD)" >> "$GITHUB_ENV"
 
-          test -f device/xiaomi/sky/BoardConfig.mk
-          test -f device/xiaomi/sky/device.mk
-          test -f device/xiaomi/sky/twrp_sky.mk
-          test -f device/xiaomi/sky/AndroidProducts.mk
+          test -s "$DEVICE_PATH/BoardConfig.mk"
+          test -s "$DEVICE_PATH/device.mk"
+          test -s "$DEVICE_PATH/AndroidProducts.mk"
 
-      - name: Apply AERA device-tree compatibility overlay
+          echo "=== DEVICE TREE COMMIT ==="
+          git -C "$DEVICE_PATH" log -1 --format='%H%n%cs%n%s'
+          echo "=== AERA CONFIG FILES ==="
+          find "$DEVICE_PATH" -maxdepth 2 -type f \\( -iname '*aera*.mk' -o -name 'vendorsetup.sh' -o -name 'twrp_*.mk' \\) -print
+
+      - name: Validate AERA product configuration
         run: |
           set -eux
           cd android-aera
-
-          # The sky device tree uses PRODUCT_PLATFORM to select the Qualcomm
-          # platform. Its matching Android device tree identifies this as parrot.
-          if ! grep -q '^PRODUCT_PLATFORM[[:space:]]*:=' device/xiaomi/sky/twrp_sky.mk; then
-            sed -i '/^PRODUCT_RELEASE_NAME[[:space:]]*:=/a PRODUCT_PLATFORM := parrot' \
-              device/xiaomi/sky/twrp_sky.mk
+          if ! grep -R -Fq "$LUNCH_TARGET" "$DEVICE_PATH/AndroidProducts.mk" "$DEVICE_PATH"; then
+            echo "::error::Lunch target '$LUNCH_TARGET' was not found in the selected device tree."
+            exit 1
           fi
-
-          # Android 16 removed the legacy gsi_keys.mk product makefile.
-          # Use the Android 16 replacement shipped in build/make.
-          sed -i 's@$(SRC_TARGET_DIR)/product/gsi_keys.mk@$(SRC_TARGET_DIR)/product/developer_gsi_keys.mk@g' \
-            device/xiaomi/sky/device.mk
-
-          # Android 16 computes BOARD_API_LEVEL from RELEASE_BOARD_API_LEVEL.
-          # Keep BOARD_SHIPPING_API_LEVEL (first API level), but remove the
-          # legacy manual BOARD_API_LEVEL assignment from the device tree.
-          sed -i '/^[[:space:]]*BOARD_API_LEVEL[[:space:]]*:=/d' \
-            device/xiaomi/sky/device.mk
-
-          # This is a recovery-only device tree: TARGET_PREBUILT_KERNEL is
-          # intentionally /dev/null, so Android cannot extract kernel release
-          # or IKCONFIG data for the OTA VINTF kernel check. Disable only that
-          # kernel-specific requirement; do not fabricate kernel metadata.
-          if ! grep -q '^PRODUCT_OTA_ENFORCE_VINTF_KERNEL_REQUIREMENTS[[:space:]]*:=' device/xiaomi/sky/device.mk; then
-            cat >> device/xiaomi/sky/device.mk <<'EOF'
-
-          # No kernel is shipped by this recovery-only tree.
-          PRODUCT_OTA_ENFORCE_VINTF_KERNEL_REQUIREMENTS := false
-          EOF
+          if [ -f "$DEVICE_PATH/vendorsetup.sh" ]; then
+            echo "Device vendorsetup.sh found."
+          else
+            echo "::warning::No vendorsetup.sh found; continuing."
           fi
-
-          # AERA Android 16 lunch targets use the bp2a release identifier.
-          sed -i 's/twrp_sky-eng/twrp_sky-bp2a-eng/g' \
-            device/xiaomi/sky/AndroidProducts.mk
-
-          # Translate the device's existing TWRP hardware settings to AERA's
-          # public configuration namespace. AERA maps these to its recovery
-          # backend internally.
-          cat >> device/xiaomi/sky/BoardConfig.mk <<'EOF'
-
-          # AERA Recovery device configuration (generated by the builder)
-          AERA_INCLUDE_CRYPTO := true
-          AERA_EXCLUDE_APEX := true
-          AERA_EXCLUDE_DEFAULT_USB_INIT := true
-          AERA_EXTRA_LANGUAGES := true
-          AERA_NO_EXFAT_FUSE := true
-          AERA_SCREEN_BLANK_ON_BOOT := true
-          AERA_INCLUDE_RESETPROP := true
-          AERA_INCLUDE_LOGCAT := true
-          AERA_USE_SERIALNO_PROPERTY_FOR_DEVICE_ID := true
-          AERA_BACKUP_EXCLUSIONS := /data/fonts/files
-          AERA_CUSTOM_CPU_TEMP_PATH := /sys/devices/virtual/thermal/thermal_zone34/temp
-          AERA_BRIGHTNESS_PATH := /sys/class/backlight/panel0-backlight/brightness
-          AERA_DEFAULT_BRIGHTNESS := 547
-          AERA_MAX_BRIGHTNESS := 2047
-          AERA_QCOM_ATS_OFFSET := 1666528204500
-          AERA_OVERRIDE_SYSTEM_PROPS := "ro.build.date.utc;ro.bootimage.build.date.utc=ro.build.date.utc;ro.odm.build.date.utc=ro.odm.build.date.utc;ro.product.build.date.utc=ro.product.build.date.utc;ro.system.build.date.utc=ro.system.build.date.utc;ro.system_ext.build.date.utc=ro.system_ext.build.date.utc;ro.vendor.build.date.utc=ro.vendor.build.date.utc"
-          AERA_LOAD_VENDOR_MODULES := "adsp_loader_dlkm.ko camera.ko leds-qpnp-vibrator-ldo.ko"
-          AERA_LOAD_VENDOR_MODULES_EXCLUDE_GKI := true
-          AERA_SUPPORT_INPUT_AIDL_HAPTICS := true
-          AERA_SUPPORT_INPUT_AIDL_HAPTICS_FIX_OFF := true
-          AERA_SUPPORT_INPUT_AIDL_HAPTICS_FQNAME := "IVibrator/default"
-          AERA_FRAMERATE := 60
-          EOF
-
-          # Add AERA's build identity and packaging options to the existing
-          # device vendorsetup script without removing its original settings.
-          cat >> device/xiaomi/sky/vendorsetup.sh <<'EOF'
-
-          # AERA Recovery packaging configuration
-          if [ "$AERA_BUILD_DEVICE" = "sky" ] || [ "$1" = "sky" ]; then
-            export LC_ALL="C"
-            export AERA_AB_DEVICE=1
-            export AERA_VIRTUAL_AB_DEVICE=1
-            export AERA_AB_DEVICE_WITH_RECOVERY_PARTITION=1
-            export AERA_VANILLA_BUILD=1
-            export AERA_PRODUCT_PREFIX=AERA
-            export AERA_BUILD_STATUS=Unofficial
-            export AERA_BUILD_TYPE=Beta
-            export AERA_TARGET_DEVICES="sky"
-            export AERA_ENABLE_ROOT_MANAGER=1
-            export AERA_USE_BASH_SHELL=1
-            export AERA_USE_BUSYBOX_BINARY=1
-            export AERA_USE_DATE_BINARY=1
-            export AERA_USE_GREP_BINARY=1
-            export AERA_USE_LZ4_BINARY=1
-            export AERA_USE_SED_BINARY=1
-            export AERA_USE_TAR_BINARY=1
-            export AERA_USE_UPDATED_MAGISKBOOT=1
-            export AERA_USE_XZ_UTILS=1
-            export AERA_USE_ZSTD_BINARY=1
-            export AERA_USE_FSCK_EROFS_BINARY=1
-            export AERA_USE_PATCHELF_BINARY=1
-            export AERA_USE_NANO_EDITOR=1
-            export AERA_DELETE_AROMAFM=1
-            export AERA_SETTINGS_ROOT_DIRECTORY=/data/recovery
-            export AERA_MISCELLANEOUS_ROOT_DIRECTORY=/sdcard
-            export AERA_ALLOW_EARLY_SETTINGS_LOAD=1
-          fi
-          EOF
-
-          # AERA's Plugin Manager is part of the native UI. Include its
-          # browser sandbox helper so the signed AERA Browser plugin can run
-          # when installed later from the in-recovery plugin catalog.
-          if ! grep -q 'aera-browser-jail' device/xiaomi/sky/device.mk; then
-            cat >> device/xiaomi/sky/device.mk <<'EOF'
-
-          # AERA Browser plugin runtime support
-          PRODUCT_PACKAGES += aera-browser-jail
-          EOF
-          fi
-
-          # Do not expose WLAN or mobile-data controls until sky has a verified
-          # device-matched WLAN module/firmware/init stack and cellular provider.
-          # UI flags alone would expose controls that cannot establish a link.
-
-          echo "AERA device-tree overlay applied."
-          grep -nE 'PRODUCT_PLATFORM|AERA_INCLUDE_CRYPTO|AERA_BRIGHTNESS_PATH|AERA_AB_DEVICE' \
-            device/xiaomi/sky/twrp_sky.mk \
-            device/xiaomi/sky/BoardConfig.mk \
-            device/xiaomi/sky/vendorsetup.sh
 
       - name: Build AERA recovery image
         run: |
@@ -265,16 +251,18 @@ jobs:
 
           # Required by AERA: set before envsetup so device-specific exports
           # cannot leak between products.
-          export AERA_BUILD_DEVICE=sky
+          export AERA_BUILD_DEVICE="$DEVICE_NAME"
           source build/envsetup.sh
-          source device/xiaomi/sky/vendorsetup.sh sky
+          if [ -f "$DEVICE_PATH/vendorsetup.sh" ]; then
+            source "$DEVICE_PATH/vendorsetup.sh" "$DEVICE_NAME"
+          fi
 
-          lunch twrp_sky-bp2a-eng
+          lunch "$LUNCH_TARGET"
 
           # Use lower parallelism on the 16 GB hosted runner. Soong's
           # Android.bp analysis is memory-intensive even before Ninja builds.
           set +e
-          mka -j2 adbd recoveryimage
+          mka -j"$BUILD_JOBS" adbd recoveryimage
           BUILD_STATUS=$?
           set -e
 
@@ -293,24 +281,21 @@ jobs:
       - name: Verify recovery image
         run: |
           set -eux
-          IMAGE="android-aera/out/target/product/sky/recovery.img"
+          IMAGE="android-aera/out/target/product/$DEVICE_NAME/recovery.img"
           test -s "$IMAGE"
 
           SIZE="$(stat -c '%s' "$IMAGE")"
-          MAX_SIZE=$((0x06400000))
           echo "Recovery image size: $SIZE bytes"
-          echo "Configured recovery partition budget: $MAX_SIZE bytes"
-
-          if [ "$SIZE" -gt "$MAX_SIZE" ]; then
-            echo "::error::recovery.img exceeds the 100 MiB recovery partition budget."
+          if [ "$MAX_RECOVERY_SIZE" -gt 0 ] && [ "$SIZE" -gt "$MAX_RECOVERY_SIZE" ]; then
+            echo "::error::recovery.img exceeds the configured maximum of $MAX_RECOVERY_SIZE bytes."
             exit 1
           fi
 
           sha256sum "$IMAGE" | tee recovery-image.sha256
           {
-            echo "### AERA Recovery build — sky"
+            echo "### AERA Recovery build — $DEVICE_NAME"
             echo
-            echo "- Device tree commit: `$DEVICE_TREE_COMMIT`"
+            echo "- Manifest: $MANIFEST ($MANIFEST_BRANCH)"\n            echo "- Device tree: $DEVICE_TREE ($DEVICE_TREE_BRANCH)"\n            echo "- Device tree commit: `$DEVICE_TREE_COMMIT`"\n            echo "- Lunch target: $LUNCH_TARGET"
             echo "- Image size: `$SIZE bytes`"
             echo "- SHA-256:"
             echo
@@ -322,10 +307,10 @@ jobs:
       - name: Upload AERA flashable ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: AERA-sky-flashable
+          name: AERA-${{ env.DEVICE_NAME }}-flashable
           path: |
-            android-aera/out/target/product/sky/AERA-*.zip
-            android-aera/out/target/product/sky/AERA-*.zip.md5
+            android-aera/out/target/product/${{ env.DEVICE_NAME }}/AERA-*.zip
+            android-aera/out/target/product/${{ env.DEVICE_NAME }}/AERA-*.zip.md5
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -333,11 +318,11 @@ jobs:
       - name: Upload AERA recovery images
         uses: actions/upload-artifact@v4
         with:
-          name: AERA-sky-recovery-image
+          name: AERA-${{ env.DEVICE_NAME }}-recovery
           path: |
-            android-aera/out/target/product/sky/AERA-*.img
-            android-aera/out/target/product/sky/AERA-*.img.md5
-            android-aera/out/target/product/sky/recovery.img
+            android-aera/out/target/product/${{ env.DEVICE_NAME }}/AERA-*.img
+            android-aera/out/target/product/${{ env.DEVICE_NAME }}/AERA-*.img.md5
+            android-aera/out/target/product/${{ env.DEVICE_NAME }}/recovery.img
             recovery-image.sha256
           if-no-files-found: error
           compression-level: 0
