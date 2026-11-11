@@ -319,15 +319,25 @@ jobs:
             echo "```"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload AERA recovery images and installer
+      - name: Upload AERA flashable ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: AERA-sky-recovery
+          name: AERA-sky-flashable
           path: |
-            android-aera/out/target/product/sky/recovery.img
-            android-aera/out/target/product/sky/AERA-*.img
             android-aera/out/target/product/sky/AERA-*.zip
-            android-aera/out/target/product/sky/AERA-*.md5
+            android-aera/out/target/product/sky/AERA-*.zip.md5
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload AERA recovery images
+        uses: actions/upload-artifact@v4
+        with:
+          name: AERA-sky-recovery-image
+          path: |
+            android-aera/out/target/product/sky/AERA-*.img
+            android-aera/out/target/product/sky/AERA-*.img.md5
+            android-aera/out/target/product/sky/recovery.img
             recovery-image.sha256
           if-no-files-found: error
           compression-level: 0
