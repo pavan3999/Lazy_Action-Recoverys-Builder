@@ -160,19 +160,6 @@ jobs:
           git config --global user.email "154446636+pavan3999@users.noreply.github.com"
           repo init -u "$MANIFEST" -b "$MANIFEST_BRANCH" --depth=1
 
-      # Restore Git object databases from the most recent AERA cache.
-      # The manifest is deliberately NOT cached: repo init above refreshes it
-      # from aera-16.0 on every run, so newly added/removed projects are noticed.
-      - name: Restore AERA Git source cache
-        uses: actions/cache@v6
-        with:
-          path: |
-            android-aera/.repo/project-objects
-            android-aera/.repo/projects
-          key: aera-android16-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            aera-android16-${{ runner.os }}-
-
       - name: Sync AERA source
         run: |
           set -eux
